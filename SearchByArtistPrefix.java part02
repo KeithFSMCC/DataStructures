@@ -1,0 +1,133 @@
+/**
+ * File: SearchByArtistPrefix.java 
+ *****************************************************************************
+ *                       Revision History (newest first)
+ *****************************************************************************
+ *
+ * 2025-09-08 - Keith and Vivek - Implemented search(String) using Arrays.binarySearch,
+ *                      added instrumentation counters (cmpCnt, loop counts),
+ *                      and updated main() to print matches.
+ * 8/2015 - Anne Applin - Added formatting and JavaDoc 
+ * 2015 - Bob Boothe   - Starting code  
+ *****************************************************************************
+ */
+
+package student;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+
+/**
+ * Search by Artist Prefix searches the artists in the song database 
+ * for artists that begin with the input String
+ * @author Boothe 
+ */
+public class SearchByArtistPrefix {
+    // keep a local direct reference to the song array
+    private final Song[] songs;  
+
+    /**
+     * constructor initializes the property. [Done]
+     * @param sc a SongCollection object
+     */
+    public SearchByArtistPrefix(SongCollection sc) {
+        songs = sc.getAllSongs();
+    }
+
+    /**
+     * Find all songs whose artist begins with artistPrefix (case-insensitive).
+     * Target complexity: O(log N + K) where K is the number of matches.
+     *
+     * Strategy:
+     *  - Use Arrays.binarySearch with Song.CmpArtist twice:
+     *      lo = first index >= prefix
+     *      hi = first index >= prefix + '\uffff'  (sentinel just past the prefix block)
+     *  - Collect the slice [lo, hi) (verify startsWith defensively), keeping order.
+     *  - Instrument: count comparator calls in the binary searches and
+     *    count comparisons while building the list; print stats here.
+     *
+     * @param artistPrefix full artist name or prefix (e.g., "Be")
+     * @return array of matching songs in sorted order
+     */
+    public Song[] search(String artistPrefix) {
+        if (artistPrefix == null) artistPrefix = "";
+        final String prefix = artistPrefix.trim();
+
+        // Comparator instrumented to count comparisons
+        Song.CmpArtist cmp = new Song.CmpArtist();
+
+        // Keys for bounds: prefix … and prefix + '\uffff'
+        Song lowerKey = new Song(prefix, "", "");
+        Song upperKey = new Song(prefix + "\uffff", "", "");
+
+        // ---- lower bound (first index >= prefix)
+        cmp.resetCmpCnt();
+        int lo = Arrays.binarySearch(songs, lowerKey, cmp);
+        int binCmp1 = cmp.getCmpCnt();
+        if (lo < 0) lo = -lo - 1;
+
+        // ---- upper bound (first index >= prefix+'\uffff') = one past last match
+        cmp.resetCmpCnt();
+        int hi = Arrays.binarySearch(songs, upperKey, cmp);
+        int binCmp2 = cmp.getCmpCnt();
+        if (hi < 0) hi = -hi - 1;
+
+        // ---- collect matches in [lo, hi)
+        ArrayList<Song> out = new ArrayList<>();
+        int loopComparisons = 0;
+        for (int i = lo; i < hi && i < songs.length; i++) {
+            loopComparisons++;
+            String artist = songs[i].getArtist();
+            int len = Math.min(artist.length(), prefix.length());
+            // case-insensitive startsWith
+            if (artist.regionMatches(true, 0, prefix, 0, len) && artist.length() >= prefix.length()) {
+                out.add(songs[i]);
+            } else {
+                break; // defensive early stop
+            }
+        }
+
+        // ---- instrumentation output (leave in per spec)
+        int k = out.size();
+        int n = songs.length;
+        int binComparisons = binCmp1 + binCmp2;
+        int actual = binComparisons + loopComparisons;
+        int log2n = (int) Math.floor(Math.log(n) / Math.log(2));
+
+        System.out.println("Searching for '" + prefix + "'");
+        System.out.println("Binary search comparisons: " + binComparisons + " (" + binCmp1 + " + " + binCmp2 + ")");
+        System.out.println("Front found at " + lo);
+        System.out.println("Index after last match (hi) is " + hi);
+        System.out.println("Comparisons to build the list: " + loopComparisons);
+        System.out.println("Actual complexity is: " + actual);
+        System.out.println("k is " + k);
+        System.out.println("log_{2}(n) = " + log2n);
+        System.out.println("Theoretical complexity k + log_{2}(n) is: " + (k + log2n));
+
+        return out.toArray(new Song[0]);
+    }
+
+    /**
+     * testing method for this unit
+     * usage: SearchByArtistPrefix <songfile> <artistPrefix>
+     */
+    public static void main(String[] args) {
+        if (args.length < 2) {
+            System.err.println("usage: SearchByArtistPrefix <songfile> <artistPrefix>");
+            return;
+        }
+
+        SongCollection sc = new SongCollection(args[0]);
+        SearchByArtistPrefix sbap = new SearchByArtistPrefix(sc);
+
+        System.out.println("searching for: " + args[1]);
+        Song[] byArtistResult = sbap.search(args[1]);
+
+        // Print total and first 10 matches (artist, "title")
+        System.out.println("\nTotal matches: " + byArtistResult.length);
+        int limit = Math.min(10, byArtistResult.length);
+        for (int i = 0; i < limit; i++) {
+            System.out.println(byArtistResult[i]);
+        }
+    }
+}
